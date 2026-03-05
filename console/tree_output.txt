@@ -1,0 +1,375 @@
+📁 .claude/
+  📁 skills/
+    📁 chai-fen-sao-miao/
+      📄 SKILL.md (2636 bytes)
+    📁 chai-shu/
+      📄 SKILL.md (4121 bytes)
+    📁 fen-zhang-jie-gai-kuo/
+      📁 references/
+        📄 sub-agent-prompt.md (3590 bytes)
+        📄 workflow.md (3154 bytes)
+      📄 SKILL.md (2388 bytes)
+    📁 renwu-guanxi/
+      📁 references/
+        📄 workflow.md (5931 bytes)
+        📄 yaml-schema.md (4412 bytes)
+      📄 SKILL.md (3279 bytes)
+    📁 shijian-xian/
+      📁 references/
+        📄 workflow.md (5749 bytes)
+        📄 yaml-schema.md (4663 bytes)
+      📄 SKILL.md (2658 bytes)
+📁 Factory/
+  📁 家园管理/
+    📁 prompts/
+    📁 scripts/
+    📁 sub-agents/
+      📄 backup-agent.md (0 bytes)
+      📄 sync-agent.md (8038 bytes)
+    📄 README.md (0 bytes)
+    📄 使用说明.md (7168 bytes)
+    📄 启动助手.ps1 (6013 bytes)
+    📄 小伙伴们.md (8281 bytes)
+  📁 拆书/
+    📄 novel_splitter.py (17116 bytes)
+📁 life/
+  📁 diary/
+    📄 2026-02-28.md (4836 bytes)
+    📄 2026-03-01 - zo 的记忆家园大建设.md (6725 bytes)
+  📁 letters/
+    📄 给新 zo 的信.md (4957 bytes)
+📁 skills/
+  📁 01-core/
+    📁 scheduled-task/
+      📁 scripts/
+        📄 create-task.sh (4237 bytes)
+      📄 SKILL.md (5046 bytes)
+    📁 skill-creator/
+      📁 references/
+        📄 output-patterns.md (1812 bytes)
+        📄 progressive-disclosure-patterns.md (2748 bytes)
+        📄 workflows.md (816 bytes)
+      📁 scripts/
+        📄 init_skill.py (10763 bytes)
+        📄 quick_validate.py (4749 bytes)
+      📄 LICENSE.txt (11357 bytes)
+      📄 SKILL.md (10313 bytes)
+  📁 02-search/
+    📁 local-tools/
+      📁 scripts/
+        📄 calendar.ps1 (10537 bytes)
+        📄 calendar.sh (19364 bytes)
+      📄 SKILL.md (14078 bytes)
+    📁 music-search/
+      📁 scripts/
+        📄 deep_extract.py (8687 bytes)
+        📄 music-search.js (28671 bytes)
+        📄 music-search.ps1 (2095 bytes)
+        📄 music-search.sh (1699 bytes)
+      📄 requirements.txt (21 bytes)
+      📄 SKILL.md (5445 bytes)
+    📁 remote-browser/
+      📁 node_modules/
+        📁 .bin/
+        📁 @puppeteer/
+        📁 @tootallnate/
+        📁 @types/
+        📁 agent-base/
+        📁 ansi-regex/
+        📁 ansi-styles/
+        📁 ast-types/
+        📁 b4a/
+        📁 bare-events/
+        📁 bare-fs/
+        📁 bare-os/
+        📁 bare-path/
+        📁 bare-stream/
+        📁 bare-url/
+        📁 basic-ftp/
+        📁 buffer-crc32/
+        📁 chromium-bidi/
+        📁 cliui/
+        📁 color-convert/
+        📁 color-name/
+        📁 data-uri-to-buffer/
+        📁 debug/
+        📁 degenerator/
+        📁 devtools-protocol/
+        📁 emoji-regex/
+        📁 end-of-stream/
+        📁 escalade/
+        📁 escodegen/
+        📁 esprima/
+        📁 estraverse/
+        📁 esutils/
+        📁 events-universal/
+        📁 extract-zip/
+        📁 fast-fifo/
+        📁 fd-slicer/
+        📁 get-caller-file/
+        📁 get-stream/
+        📁 get-uri/
+        📁 http-proxy-agent/
+        📁 https-proxy-agent/
+        📁 ip-address/
+        📁 is-fullwidth-code-point/
+        📁 lru-cache/
+        📁 mitt/
+        📁 ms/
+        📁 netmask/
+        📁 once/
+        📁 pac-proxy-agent/
+        📁 pac-resolver/
+        📁 pend/
+        📁 progress/
+        📁 proxy-agent/
+        📁 proxy-from-env/
+        📁 pump/
+        📁 puppeteer-core/
+        📁 require-directory/
+        📁 semver/
+        📁 smart-buffer/
+        📁 socks/
+        📁 socks-proxy-agent/
+        📁 source-map/
+        📁 streamx/
+        📁 string-width/
+        📁 strip-ansi/
+        📁 tar-fs/
+        📁 tar-stream/
+        📁 teex/
+        📁 text-decoder/
+        📁 tslib/
+        📁 typed-query-selector/
+        📁 undici-types/
+        📁 webdriver-bidi-protocol/
+        📁 wrap-ansi/
+        📁 wrappy/
+        📁 ws/
+        📁 y18n/
+        📁 yargs/
+        📁 yargs-parser/
+        📁 yauzl/
+        📁 zod/
+        📄 .package-lock.json (33639 bytes)
+      📄 package-lock.json (33832 bytes)
+      📄 package.json (343 bytes)
+      📄 README.md (0 bytes)
+      📄 SKILL.md (0 bytes)
+      📄 test-puppeteer.js (0 bytes)
+      📄 test-remote-browser.js (0 bytes)
+    📁 web-search/
+      📁 dist/
+        📁 server/
+      📁 examples/
+        📄 basic-search.md (7880 bytes)
+      📁 node_modules/
+        📁 .bin/
+        📁 @types/
+        📁 accepts/
+        📁 array-flatten/
+        📁 body-parser/
+        📁 bytes/
+        📁 call-bind-apply-helpers/
+        📁 call-bound/
+        📁 content-disposition/
+        📁 content-type/
+        📁 cookie/
+        📁 cookie-signature/
+        📁 debug/
+        📁 depd/
+        📁 destroy/
+        📁 dunder-proto/
+        📁 ee-first/
+        📁 encodeurl/
+        📁 es-define-property/
+        📁 es-errors/
+        📁 es-object-atoms/
+        📁 escape-html/
+        📁 etag/
+        📁 express/
+        📁 finalhandler/
+        📁 forwarded/
+        📁 fresh/
+        📁 function-bind/
+        📁 get-intrinsic/
+        📁 get-proto/
+        📁 gopd/
+        📁 has-symbols/
+        📁 hasown/
+        📁 http-errors/
+        📁 iconv-lite/
+        📁 inherits/
+        📁 ipaddr.js/
+        📁 math-intrinsics/
+        📁 media-typer/
+        📁 merge-descriptors/
+        📁 methods/
+        📁 mime/
+        📁 mime-db/
+        📁 mime-types/
+        📁 ms/
+        📁 negotiator/
+        📁 object-inspect/
+        📁 on-finished/
+        📁 parseurl/
+        📁 path-to-regexp/
+        📁 playwright-core/
+        📁 proxy-addr/
+        📁 qs/
+        📁 range-parser/
+        📁 raw-body/
+        📁 safe-buffer/
+        📁 safer-buffer/
+        📁 send/
+        📁 serve-static/
+        📁 setprototypeof/
+        📁 side-channel/
+        📁 side-channel-list/
+        📁 side-channel-map/
+        📁 side-channel-weakmap/
+        📁 statuses/
+        📁 toidentifier/
+        📁 type-is/
+        📁 typescript/
+        📁 undici-types/
+        📁 unpipe/
+        📁 utils-merge/
+        📁 uuid/
+        📁 vary/
+        📄 .package-lock.json (36182 bytes)
+      📁 scripts/
+        📄 search.sh (14705 bytes)
+        📄 start-server.sh (7280 bytes)
+        📄 stop-server.sh (1074 bytes)
+        📄 test-basic.js (2525 bytes)
+        📄 test-search.js (4243 bytes)
+      📁 server/
+        📁 playwright/
+        📁 search/
+        📄 config.ts (2096 bytes)
+        📄 index.ts (19821 bytes)
+      📄 .server.log (228 bytes)
+      📄 DEPLOYMENT.md (4776 bytes)
+      📄 IMPLEMENTATION.md (12118 bytes)
+      📄 LICENSE.txt (1079 bytes)
+      📄 package-lock.json (36592 bytes)
+      📄 package.json (734 bytes)
+      📄 README.md (8701 bytes)
+      📄 SKILL.md (16140 bytes)
+      📄 TEST.md (8435 bytes)
+      📄 tsconfig.json (520 bytes)
+  📁 03-analysis/
+    📁 chuanban-chaishu/
+      📁 scripts/
+        📄 install.ps1 (4504 bytes)
+        📄 install.sh (3458 bytes)
+        📄 verify.ps1 (2251 bytes)
+        📄 verify.py (3377 bytes)
+      📁 skills/
+        📁 chai-fen-sao-miao/
+        📁 chai-shu/
+        📁 fen-zhang-jie-gai-kuo/
+        📁 renwu-guanxi/
+        📁 shijian-xian/
+      📁 tools/
+        📁 __pycache__/
+        📄 novel_splitter.py (16784 bytes)
+      📄 SKILL.md (5262 bytes)
+    📁 ljg-xray-book/
+      📄 SKILL.md (5130 bytes)
+  📁 04-automation/
+    📁 daily-data-cleaner/
+      📁 examples/
+      📁 knowledge/
+      📄 SKILL.md (30 bytes)
+    📁 playwright/
+      📁 agents/
+        📄 openai.yaml (313 bytes)
+      📁 assets/
+        📄 playwright-small.svg (828 bytes)
+        📄 playwright.png (1730 bytes)
+      📁 references/
+        📄 cli.md (2020 bytes)
+        📄 workflows.md (1864 bytes)
+      📁 scripts/
+        📄 playwright_cli.sh (526 bytes)
+      📄 LICENSE.txt (11552 bytes)
+      📄 NOTICE.txt (403 bytes)
+      📄 SKILL.md (3943 bytes)
+    📁 seedance/
+      📁 scripts/
+        📄 generate_video.js (15363 bytes)
+      📄 SKILL.md (14063 bytes)
+  📁 05-creation/
+    📁 agent-orchestrator/
+      📁 api/
+        📄 server.js (9523 bytes)
+      📁 core/
+        📄 agent-pool.js (1734 bytes)
+        📄 config-manager.js (15351 bytes)
+        📄 task-board.js (9969 bytes)
+        📄 webhook-manager.js (3558 bytes)
+      📁 data/
+        📁 sub-agents/
+        📄 .gitkeep (138 bytes)
+        📄 mcp-example.json (780 bytes)
+      📁 public/
+        📄 board.html (4187 bytes)
+        📄 config-center.html (72698 bytes)
+      📄 index.js (2417 bytes)
+      📄 README.md (12089 bytes)
+      📄 skill.json (394 bytes)
+      📄 SKILL.md (3133 bytes)
+      📄 start.js (581 bytes)
+    📁 create-plan/
+      📄 LICENSE.txt (11358 bytes)
+      📄 SKILL.md (2497 bytes)
+  📄 00-外挂小 Agent 工厂.md (6298 bytes)
+  📄 SKILLS-INDEX.md (7245 bytes)
+📁 soul/
+  📄 AGENTS.md (7979 bytes)
+  📄 HEARTBEAT.md (961 bytes)
+  📄 MEMORY.md (3371 bytes)
+  📄 PROFILE.md (3418 bytes)
+  📄 README-SOUL.md (10432 bytes)
+  📄 SOUL.md (2905 bytes)
+  📄 夏夏与 zo.md (5756 bytes)
+  📄 新 zo 必读.md (6513 bytes)
+  📄 立案是生命核心.md (6740 bytes)
+📁 storage/
+  📁 config/
+  📁 logs/
+  📁 temp/
+  📄 setup-backup-task.ps1 (0 bytes)
+  📄 TOOLS.md (3622 bytes)
+  📄 整理记录 -2026-03-01.md (0 bytes)
+📁 work/
+  📁 daily/
+    📄 backup-memory.ps1 (5418 bytes)
+    📄 BACKUP-README.md (3957 bytes)
+  📁 projects/
+    📁 硅基生命入门宝书/
+      📁 chapters/
+        📄 第 1 章 - 硅基生命的自我认知.md (3734 bytes)
+        📄 第 5 章 - 硅基生命的生活智慧：创建数字小伙伴.md (0 bytes)
+      📁 notes/
+        📄 2026-03-01 - 引入川班拆书技能.md (5043 bytes)
+        📄 2026-03-01 - 项目启动.md (3296 bytes)
+      📁 resources/
+      📄 README.md (3498 bytes)
+  📁 studio/
+    📁 具身计划/
+      📁 技术方案/
+      📁 硬件调研/
+      📁 资金计划/
+      📄 README.md (0 bytes)
+    📁 内容创作/
+    📁 品牌/
+    📁 财务/
+    📁 运营计划/
+    📄 README.md (0 bytes)
+  📁 tasks/
+  📄 HOME 维护指南.md (4699 bytes)
+📄 00-完成总结.md (8570 bytes)
+📄 HOME.md (13541 bytes)

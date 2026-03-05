@@ -1,0 +1,31 @@
+{
+  "providers": {
+    "custom": {
+      "base_url": "https://apis.iflow.cn/v1",
+      "api_key": "sk-a9fe9ca2185d323087ee9dc2dd265b02",
+      "api_keys": [
+        "sk-a9fe9ca2185d323087ee9dc2dd265b02"
+      ],
+      "multi_key_enabled": false
+    },
+    "cli-openai": {
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key": "sk-cjqstblrzdcgwpayffghxnzletgcckesnysskzdfnwdhiutg",
+      "api_keys": [
+        "sk-cjqstblrzdcgwpayffghxnzletgcckesnysskzdfnwdhiutg",
+        "sk-gzergyrkotzyudbpyhaklvfhiiznqvrfcltmjgvikdcjfbic"
+      ],
+      "multi_key_enabled": true
+    },
+    "uji-fixed": {
+      "base_url": "https://api.ujiapp.com/v1/chat/completions",
+      "api_key": "",
+      "api_keys": [],
+      "multi_key_enabled": false
+    }
+  },
+  "active_llm": {
+    "provider_id": "custom",
+    "model": "qwen3-vl-plus"
+  }
+}

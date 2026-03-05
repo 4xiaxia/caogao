@@ -1,0 +1,24 @@
+{
+  "name": "console",
+  "version": "1.0.0",
+  "description": "CoPaw Console - 马卡龙主题",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["copaw", "naive-ui", "macaron"],
+  "author": "zo (◕‿◕)",
+  "license": "MIT",
+  "dependencies": {
+    "@vicons/ionicons5": "^0.13.0",
+    "naive-ui": "^2.43.2",
+    "vue": "^3.5.29",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.4",
+    "vite": "^5.4.21"
+  }
+}

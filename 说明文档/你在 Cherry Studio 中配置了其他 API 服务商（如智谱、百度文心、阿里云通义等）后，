@@ -1,0 +1,1366 @@
+你在 Cherry Studio 中配置了其他 API 服务商（如智谱、百度文心、阿里云通义等）后，**外部系统仍可通过 Cherry Studio 统一的 OpenAI 兼容接口调用这些第三方模型**，无需修改外部系统代码，仅需在调用时指定对应模型标识即可。我会详细说明配置流程、调用方法和代码示例：
+
+### 核心逻辑
+Cherry Studio 相当于「模型网关」—— 你在控制台配置好第三方 API 服务商的密钥、模型映射后，外部系统调用 Cherry API 时，只需指定 `{服务商标识}:{模型ID}` 格式的模型名，Cherry 会自动转发请求到对应服务商并返回结果，全程对外部系统透明。
+
+## 一、前置步骤：Cherry Studio 配置第三方 API 服务商
+### 1. 新增 API 服务商（Cherry 控制台操作）
+1. 登录 Cherry Studio 控制台 → 进入「模型管理」→「服务商管理」→ 点击「新增服务商」；
+2. 选择服务商类型（如「智谱AI」「百度文心一言」「阿里云通义千问」等）；
+3. 填写服务商配置：
+   - 服务商名称（自定义，如 `zhipu`）；
+   - API 密钥/Access Key（从第三方服务商控制台获取，如智谱的 `sk-xxxx`）；
+   - 接口地址（可选，默认使用服务商官方地址，私有化部署可自定义）；
+4. 点击「测试连接」，验证配置正确后保存。
+
+### 2. 绑定第三方模型到 Cherry
+1. 在「模型管理」→「模型列表」→ 点击「新增模型」；
+2. 填写模型信息：
+   - 模型名称（自定义，如 `zhipu-glm-4`）；
+   - 模型标识（核心！格式为 `{服务商标识}:{第三方模型ID}`，如 `zhipu:glm-4`、`baidu:ernie-4.0`）；
+   - 关联服务商：选择第一步配置的第三方服务商；
+   - 配置默认参数（如 `temperature=0.7`，可被外部调用参数覆盖）；
+3. 保存后，该模型会出现在 Cherry 可用模型列表中。
+
+### 3. （可选）配置到 Agent
+若需将第三方模型绑定到 Agent（方便统一管理工具、对话规则），可在「Agent 管理」→ 对应 Agent 配置页 →「模型选择」中，选择刚新增的第三方模型作为默认模型。
+
+## 二、外部系统调用第三方模型（核心：指定模型标识）
+外部系统调用逻辑**完全不变**，仅需将 `model` 参数改为 Cherry 配置的「第三方模型标识」（如 `zhipu:glm-4`），Cherry 会自动处理转发。
+
+### 方式1：直接调用第三方模型（静态指定）
+```python
+from openai import OpenAI
+
+# 外部系统初始化 Cherry 客户端（配置不变）
+client = OpenAI(
+    api_key="CHERRY_API_KEY",  # Cherry 的 API Key（不是第三方服务商的）
+    base_url="CHERRY_BASE_URL"  # Cherry 部署地址
+)
+
+# 调用 Cherry 配置的智谱 GLM-4 模型
+def call_third_party_model(user_input):
+    try:
+        response = client.chat.completions.create(
+            # 关键：指定 Cherry 配置的第三方模型标识
+            model="zhipu:glm-4",  
+            messages=[
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"调用第三方模型失败：{e}"
+
+# 测试调用智谱模型
+print(call_third_party_model("用GLM-4分析大模型的行业应用"))
+```
+
+### 方式2：动态切换不同服务商模型（外部系统侧）
+你可以在外部系统中维护「业务场景→第三方模型」的映射表，实现一键切换不同服务商：
+```python
+# 外部系统维护的多服务商模型映射表
+MULTI_PROVIDER_MODEL_MAP = {
+    "轻量对话": "cherry:llama3-8b",    # Cherry 本地模型
+    "智谱大模型": "zhipu:glm-4",       # 智谱第三方模型
+    "百度文心": "baidu:ernie-4.0",     # 百度第三方模型
+    "阿里云通义": "ali:qwen-max"       # 阿里云第三方模型
+}
+
+# 动态调用不同服务商的模型
+def dynamic_call_provider(user_input, model_key="轻量对话"):
+    target_model = MULTI_PROVIDER_MODEL_MAP.get(model_key)
+    if not target_model:
+        return f"不支持的模型类型：{model_key}"
+    
+    try:
+        response = client.chat.completions.create(
+            model=target_model,  # 自动切换到对应服务商模型
+            messages=[{"role": "user", "content": user_input}],
+            temperature=0.7
+        )
+        return f"【调用服务商模型：{target_model}】\n{response.choices[0].message.content}"
+    except Exception as e:
+        return f"调用失败：{e}"
+
+# 测试切换不同服务商
+print(dynamic_call_provider("用文心一言分析企业数字化转型", "百度文心"))
+print(dynamic_call_provider("用通义千问写一篇行业报告", "阿里云通义"))
+```
+
+### 方式3：通过 Agent 调用第三方模型（推荐）
+若你已将第三方模型绑定到 Agent，外部系统调用时只需指定 Agent 关联的模型，或直接使用 Agent 默认模型：
+```python
+# 调用绑定了智谱模型的 Agent（无需关心底层服务商）
+def call_agent_with_third_party(user_input):
+    response = client.chat.completions.create(
+        model="zhipu:glm-4",  # Agent 配置的默认模型是智谱 GLM-4
+        messages=[
+            {"role": "system", "content": "使用绑定的模型回答"},
+            {"role": "user", "content": user_input}
+        ],
+        # 可携带 Agent 标识（若需指定特定 Agent）
+        extra_body={"agent_id": "your-agent-id"}  # Cherry 专属扩展参数
+    )
+    return response.choices[0].message.content
+```
+
+## 三、关键注意事项
+### 1. 模型标识格式要求
+必须严格遵循 `{服务商标识}:{模型ID}` 格式：
+- 服务商标识：Cherry 控制台配置的服务商名称（如 `zhipu`、`baidu`）；
+- 模型ID：第三方服务商的官方模型名（如智谱的 `glm-4`、百度的 `ernie-4.0`）。
+
+### 2. 权限与密钥管理
+- 外部系统只需持有 Cherry 的 API Key，无需存储第三方服务商的密钥（由 Cherry 统一管理，更安全）；
+- 需确保 Cherry 配置的第三方服务商密钥有效，且拥有对应模型的调用权限。
+
+### 3. 参数兼容性
+- Cherry 会自动将 OpenAI 格式的参数（如 `temperature`、`max_tokens`）转换为第三方服务商的参数（如智谱的 `top_p`、`max_length`）；
+- 若第三方模型不支持某参数（如部分模型无 `stream` 流式响应），Cherry 会返回友好错误，或自动忽略该参数。
+
+### 4. 响应格式统一
+无论调用哪个第三方服务商，Cherry 都会将返回结果转换为标准的 OpenAI 格式，外部系统无需适配不同服务商的响应结构：
+```json
+// 调用智谱模型的响应（Cherry 统一格式）
+{
+  "id": "chatcmpl-cherry-zhipu-123",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "zhipu:glm-4",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "智谱GLM-4的回答内容..."},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {"prompt_tokens": 20, "completion_tokens": 100, "total_tokens": 120}
+}
+```
+
+## 四、完整示例：多服务商模型切换
+```python
+from openai import OpenAI
+
+# 初始化 Cherry 客户端
+client = OpenAI(
+    api_key="cherry_sk_xxxx",
+    base_url="http://192.168.1.100:8000/v1"
+)
+
+# 多服务商模型映射
+PROVIDER_MODELS = {
+    "cherry-local": "cherry:llama3-8b",    # Cherry 本地模型
+    "zhipu": "zhipu:glm-4",                # 智谱AI
+    "baidu": "baidu:ernie-4.0",            # 百度文心
+    "ali": "ali:qwen-max"                  # 阿里云通义
+}
+
+# 统一调用函数
+def call_any_model(user_input, provider="cherry-local"):
+    # 1. 获取模型标识
+    model_id = PROVIDER_MODELS.get(provider)
+    if not model_id:
+        return f"不支持的服务商：{provider}，可选：{list(PROVIDER_MODELS.keys())}"
+    
+    # 2. 调用 Cherry API
+    try:
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=[{"role": "user", "content": user_input}],
+            temperature=0.7,
+            max_tokens=2000,
+            stream=False
+        )
+        # 3. 解析结果
+        return f"【服务商：{provider} | 模型：{model_id}】\n{response.choices[0].message.content}"
+    except Exception as e:
+        return f"调用错误：{str(e)}"
+
+# 测试调用不同服务商
+if __name__ == "__main__":
+    # 调用 Cherry 本地模型
+    print(call_any_model("解释大模型的注意力机制"))
+    # 调用智谱模型
+    print(call_any_model("用GLM-4详解注意力机制", "zhipu"))
+    # 调用百度文心
+    print(call_any_model("文心一言分析注意力机制的优化方向", "baidu"))
+```
+
+### 总结
+1. 配置第三方 API 服务商后，外部系统**无需修改核心代码**，仅需将 `model` 参数改为 `{服务商标识}:{模型ID}` 即可调用；
+2. Cherry 负责「参数转换、请求转发、响应格式统一」，外部系统只需对接 Cherry 这一个入口；
+3. 支持静态指定、动态切换、Agent 绑定三种调用方式，兼顾简单场景和复杂业务需求；
+4. 密钥由 Cherry 统一管理，外部系统无需接触第三方服务商密钥，提升安全性。
+
+你**完全可以在外部系统中直接切换 Cherry Studio 的模型**，无需修改 Cherry 控制台配置，且支持「静态指定」和「动态切换」两种方式，我会详细说明具体实现方法、注意事项和代码示例：
+
+### 核心结论
+Cherry Studio 支持外部系统通过 API 调用时的 `model` 参数**直接指定要使用的模型**，优先级高于 Agent 控制台配置的默认模型，实现灵活切换。
+
+## 一、模型切换的两种方式（外部系统侧实现）
+### 方式1：静态切换（固定模型）
+适合业务场景固定的情况，直接在调用代码中写死模型 ID 即可，步骤：
+1. **获取 Cherry 模型标识**：
+   - 登录 Cherry Studio 控制台 → 「模型管理」→ 复制目标模型的「模型标识」（格式：`cherry:{模型ID}`，如 `cherry:llama3-8b`、`cherry:qwen2-7b`）；
+2. **在调用代码中指定**：
+   将请求参数 `model` 的值改为目标模型标识，示例：
+   ```python
+   # 原调用 gpt-3.5-turbo（兼容模式）
+   response = client.chat.completions.create(
+       model="gpt-3.5-turbo",  # 兼容模式，映射到 Cherry 配置的默认模型
+       messages=[{"role":"user","content":"测试"}],
+       temperature=0.7
+   )
+
+   # 切换为 Cherry 本地的 Llama3-8b 模型（静态指定）
+   response = client.chat.completions.create(
+       model="cherry:llama3-8b",  # 直接指定 Cherry 模型ID
+       messages=[{"role":"user","content":"测试"}],
+       temperature=0.7
+   )
+   ```
+
+### 方式2：动态切换（运行时指定）
+适合需要根据业务场景动态选择模型的情况（如不同用户/不同请求使用不同模型），步骤：
+1. **维护模型列表**：
+   在外部系统中维护 Cherry 可用模型的映射表（可从 Cherry 接口获取，也可手动配置）：
+   ```python
+   # 外部系统维护的模型映射表（key：业务标识，value：Cherry模型ID）
+   MODEL_MAP = {
+       "轻量对话": "cherry:llama3-8b",    # 轻量模型，响应快
+       "复杂推理": "cherry:llama3-70b",   # 大模型，推理能力强
+       "中文优化": "cherry:qwen2-7b"      # 中文优化模型
+   }
+   ```
+2. **根据业务逻辑选择模型**：
+   调用 API 时根据请求参数/用户配置动态选择模型：
+   ```python
+   def cherry_chat(user_input, model_type="轻量对话"):
+       # 动态获取模型ID
+       target_model = MODEL_MAP.get(model_type, "cherry:llama3-8b")
+       
+       # 调用API时指定模型
+       response = client.chat.completions.create(
+           model=target_model,  # 动态切换模型
+           messages=[{"role":"user","content":user_input}],
+           temperature=0.7
+       )
+       return response.choices[0].message.content
+
+   # 业务1：使用轻量模型
+   cherry_chat("天气怎么样？", "轻量对话")
+   # 业务2：使用复杂推理模型
+   cherry_chat("分析一份财务报表", "复杂推理")
+   ```
+
+## 二、获取 Cherry 可用模型列表（外部系统自动获取）
+如果想避免手动维护模型ID，外部系统可调用 Cherry 的 `/v1/models` 接口**自动获取所有可用模型**，实现动态适配：
+### 代码示例（Python）
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="CHERRY_API_KEY",
+    base_url="CHERRY_BASE_URL"
+)
+
+# 获取Cherry所有可用模型
+def get_cherry_models():
+    try:
+        # 调用模型列表接口（与OpenAI格式一致）
+        models = client.models.list()
+        # 解析模型列表，提取模型ID
+        model_list = [model.id for model in models.data if model.id.startswith("cherry:")]
+        return model_list
+    except Exception as e:
+        print(f"获取模型列表失败：{e}")
+        return []
+
+# 示例：获取模型列表并随机选择一个
+if __name__ == "__main__":
+    available_models = get_cherry_models()
+    print("Cherry可用模型：", available_models)  # 输出：['cherry:llama3-8b', 'cherry:qwen2-7b']
+    if available_models:
+        # 动态选择第一个模型
+        cherry_chat("测试动态模型", model_type=None)  # 内部可选择 available_models[0]
+```
+
+## 三、模型切换的注意事项
+1. **模型ID格式要求**：
+   - 必须以 `cherry:` 开头（如 `cherry:llama3-8b`），否则 Cherry 会按 OpenAI 兼容模式处理（需配置模型映射）；
+   - 模型ID必须是 Cherry 控制台「模型管理」中已部署且启用的模型，否则会返回 `model_not_found` 错误。
+2. **优先级规则**：
+   - 外部 API 调用传入的 `model` 参数 > Agent 控制台配置的默认模型；
+   - 若调用时不传 `model` 参数，会使用 Agent 配置的默认模型。
+3. **参数兼容**：
+   不同模型的参数（如 `max_tokens`、`temperature`）取值范围可能不同，建议：
+   - 调用时显式指定 `temperature`（0~2）和 `max_tokens`（≥1）；
+   - 若模型不支持某参数，Cherry 会自动忽略并使用模型默认值。
+4. **权限控制**：
+   外部系统使用的 API Key 需拥有对应模型的调用权限（Cherry 控制台「API Key 管理」中配置），否则会返回 `permission_denied` 错误。
+
+## 四、完整示例：外部系统动态切换模型
+```python
+from openai import OpenAI
+
+# 初始化客户端
+client = OpenAI(
+    api_key="cherry_sk_xxxx",
+    base_url="http://192.168.1.100:8000/v1"
+)
+
+# 业务模型映射表
+MODEL_MAP = {
+    "default": "cherry:llama3-8b",
+    "high_quality": "cherry:llama3-70b",
+    "chinese": "cherry:qwen2-7b"
+}
+
+# 动态切换模型的对话函数
+def dynamic_chat(user_input, model_key="default"):
+    # 1. 校验模型是否存在
+    target_model = MODEL_MAP.get(model_key)
+    if not target_model:
+        return f"不支持的模型类型：{model_key}，可用类型：{list(MODEL_MAP.keys())}"
+    
+    # 2. 调用Cherry API，指定目标模型
+    try:
+        response = client.chat.completions.create(
+            model=target_model,  # 动态切换模型
+            messages=[
+                {"role": "system", "content": "根据所选模型回答问题"},
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        # 3. 返回结果，同时标注使用的模型
+        return f"【使用模型：{target_model}】\n{response.choices[0].message.content}"
+    except Exception as e:
+        return f"调用失败：{e}"
+
+# 测试不同模型切换
+if __name__ == "__main__":
+    # 使用默认模型
+    print(dynamic_chat("解释一下大模型的上下文窗口"))
+    # 使用中文优化模型
+    print(dynamic_chat("用中文详细说明上下文窗口的作用", "chinese"))
+    # 使用高质量模型
+    print(dynamic_chat("分析上下文窗口对推理能力的影响", "high_quality"))
+```
+
+### 总结
+1. 外部系统**可以自由切换 Cherry 模型**，核心是通过 API 调用时的 `model` 参数指定 `cherry:{模型ID}`；
+2. 支持「静态写死」和「动态根据业务场景选择」两种方式，后者更灵活；
+3. 可通过 `/v1/models` 接口自动获取 Cherry 可用模型列表，避免手动维护；
+4. 注意模型ID格式、权限和参数兼容性，确保切换后调用正常。
+
+
+我为你整理了**多语言、多场景的原有系统调用 Cherry Studio API 的代码示例**，覆盖基础对话、工具调用、流式响应三大核心场景，代码可直接复制使用，同时标注关键配置点：
+
+### 前置说明
+| 配置项          | 替换为你的实际值                | 备注                     |
+|-----------------|---------------------------------|--------------------------|
+| CHERRY_API_KEY  | cherry_sk_xxxx（Agent 生成的密钥） | 替代原 OpenAI 的 sk-xxxx |
+| CHERRY_BASE_URL | http://{Cherry部署IP}:8000/v1   | 替代原 OpenAI 的 https://api.openai.com/v1 |
+| MODEL_NAME      | cherry:llama3-8b（Cherry 模型ID） | 也可填 gpt-3.5-turbo（自动映射） |
+
+---
+
+## 场景1：基础对话（非流式，Python 示例）
+原有对接 OpenAI 的 Python 代码，仅需修改 2 处配置即可调用 Cherry：
+```python
+# 1. 安装依赖（与 OpenAI 一致）
+# pip install openai>=1.0.0
+
+from openai import OpenAI
+
+# 2. 初始化客户端（仅修改 api_key 和 base_url）
+client = OpenAI(
+    api_key="CHERRY_API_KEY",  # 替换为你的 Cherry API Key
+    base_url="CHERRY_BASE_URL"  # 替换为你的 Cherry 部署地址
+)
+
+# 3. 调用对话接口（逻辑与 OpenAI 完全一致）
+def cherry_chat_completion(user_input):
+    try:
+        response = client.chat.completions.create(
+            model="MODEL_NAME",  # 替换为 Cherry 模型ID（如 cherry:llama3-8b）
+            messages=[
+                {"role": "system", "content": "你是一个智能业务助手，回答简洁准确"},
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.7,  # 可覆盖 Agent 配置的默认值
+            max_tokens=2000    # 控制生成文本长度
+        )
+        # 解析响应（格式与 OpenAI 一致）
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用失败：{e}")
+        return None
+
+# 测试调用
+if __name__ == "__main__":
+    result = cherry_chat_completion("解释一下Cherry Studio的Agent功能")
+    print("回复结果：", result)
+```
+
+---
+
+## 场景2：工具调用（Python 示例）
+调用 Cherry Agent 绑定的自定义工具（如数据库查询）：
+```python
+from openai import OpenAI
+import json
+
+client = OpenAI(
+    api_key="CHERRY_API_KEY",
+    base_url="CHERRY_BASE_URL"
+)
+
+def cherry_tool_call(user_input):
+    # 定义要调用的 Cherry 工具（需与 Agent 配置的工具名称一致）
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "db_query_order",  # Cherry 控制台配置的工具名称
+                "description": "查询订单金额、状态等信息",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {
+                            "type": "string",
+                            "description": "订单ID，格式为OD+6位数字"
+                        }
+                    },
+                    "required": ["order_id"]
+                }
+            }
+        }
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model="MODEL_NAME",
+            messages=[{"role": "user", "content": user_input}],
+            tools=tools,          # 指定要调用的工具列表
+            tool_choice="auto",   # 自动触发工具（也可指定工具名：{"type":"function","function":{"name":"db_query_order"}}）
+            temperature=0.7
+        )
+
+        # 解析工具调用结果
+        message = response.choices[0].message
+        if message.tool_calls:
+            # 遍历工具调用结果
+            for tool_call in message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments)
+                print(f"触发工具：{tool_name}，参数：{tool_args}")
+                # 原有系统可在此处对接本地工具执行逻辑（如查询数据库）
+                return f"订单 {tool_args['order_id']} 的金额为 199 元，状态：已支付"
+        else:
+            # 未触发工具，直接返回模型回答
+            return message.content
+    except Exception as e:
+        print(f"工具调用失败：{e}")
+        return None
+
+# 测试调用（触发订单查询工具）
+if __name__ == "__main__":
+    result = cherry_tool_call("查询订单OD123456的金额")
+    print("工具调用结果：", result)
+```
+
+---
+
+## 场景3：流式响应（Python 示例）
+适配原有实时聊天界面的流式调用（如网页端实时输出）：
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="CHERRY_API_KEY",
+    base_url="CHERRY_BASE_URL"
+)
+
+def cherry_stream_chat(user_input):
+    try:
+        # 开启流式响应
+        stream = client.chat.completions.create(
+            model="MODEL_NAME",
+            messages=[{"role": "user", "content": user_input}],
+            stream=True,  # 关键：开启流式
+            temperature=0.7
+        )
+
+        # 逐段接收响应（原有流式逻辑无需修改）
+        full_response = ""
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                # 实时输出（可替换为前端推送逻辑）
+                print(content, end="", flush=True)
+        return full_response
+    except Exception as e:
+        print(f"\n流式调用失败：{e}")
+        return None
+
+# 测试流式调用
+if __name__ == "__main__":
+    cherry_stream_chat("详细介绍Cherry Studio对接原有系统的步骤")
+```
+
+---
+
+## 场景4：Java 示例（基础对话）
+原有 Java 系统对接 Cherry（使用 OpenAI Java SDK）：
+```java
+// 1. 引入依赖（Maven）
+<!-- https://mvnrepository.com/artifact/com.theokanning.openai-gpt3-java/client -->
+<dependency>
+    <groupId>com.theokanning.openai-gpt3-java</groupId>
+    <artifactId>client</artifactId>
+    <version>0.18.2</version>
+</dependency>
+
+import com.theokanning.openai.completion.chat.ChatCompletionRequest;
+import com.theokanning.openai.completion.chat.ChatMessage;
+import com.theokanning.openai.service.OpenAiService;
+import java.time.Duration;
+import java.util.List;
+
+public class CherryChatExample {
+    public static void main(String[] args) {
+        // 2. 初始化客户端（修改 API Key 和 Base URL）
+        String apiKey = "CHERRY_API_KEY";
+        String baseUrl = "CHERRY_BASE_URL";
+        
+        // 自定义客户端配置（指定 Cherry 地址）
+        OpenAiService service = new OpenAiService(
+            apiKey,
+            Duration.ofSeconds(30),
+            baseUrl
+        );
+
+        // 3. 构建请求（与 OpenAI 一致）
+        ChatCompletionRequest request = ChatCompletionRequest.builder()
+            .model("MODEL_NAME") // Cherry 模型ID
+            .messages(List.of(
+                new ChatMessage("system", "你是业务助手"),
+                new ChatMessage("user", "查询今天的订单总数")
+            ))
+            .temperature(0.7)
+            .maxTokens(2000)
+            .build();
+
+        // 4. 调用接口并解析结果
+        try {
+            String response = service.createChatCompletion(request).getChoices().get(0).getMessage().getContent();
+            System.out.println("回复结果：" + response);
+        } catch (Exception e) {
+            System.err.println("调用失败：" + e.getMessage());
+        }
+    }
+}
+```
+
+---
+
+## 场景5：PHP 示例（基础对话）
+```php
+<?php
+// 无需安装 SDK，直接通过 HTTP 请求调用
+$apiKey = "CHERRY_API_KEY";
+$baseUrl = "CHERRY_BASE_URL";
+$model = "MODEL_NAME";
+
+// 构建请求参数
+$data = [
+    "model" => $model,
+    "messages" => [
+        ["role" => "system", "content" => "你是智能助手"],
+        ["role" => "user", "content" => "介绍Cherry Studio的模型管理功能"]
+    ],
+    "temperature" => 0.7,
+    "max_tokens" => 2000
+];
+
+// 发起 POST 请求（与 OpenAI 接口格式一致）
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $baseUrl . "/chat/completions");
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+curl_setopt($ch, CURLOPT_POST, 1);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Content-Type: application/json",
+    "Authorization: Bearer " . $apiKey
+]);
+
+// 执行请求并解析结果
+$response = curl_exec($ch);
+if (curl_errno($ch)) {
+    echo "调用失败：" . curl_error($ch);
+} else {
+    $result = json_decode($response, true);
+    if (isset($result['choices'][0]['message']['content'])) {
+        echo "回复结果：" . $result['choices'][0]['message']['content'];
+    } else {
+        echo "响应格式错误：" . $response;
+    }
+}
+curl_close($ch);
+?>
+```
+
+---
+
+### 关键注意事项
+1. **依赖兼容**：所有示例使用与 OpenAI 一致的 SDK/请求格式，原有系统无需更换依赖；
+2. **模型选择**：
+   - 精准指定：使用 `cherry:{模型ID}`（如 `cherry:llama3-8b`），需与 Cherry 控制台配置的模型ID一致；
+   - 零修改兼容：直接用 `gpt-3.5-turbo`，需在 Cherry 控制台「模型映射」中配置映射规则；
+3. **错误处理**：Cherry 返回的错误格式与 OpenAI 一致（如 `invalid_request_error`），原有异常捕获逻辑无需修改；
+4. **工具调用前提**：需先在 Cherry 控制台为 Agent 绑定工具，并确保 API Key 拥有工具调用权限。
+
+### 总结
+1. 原有系统调用 Cherry 的核心是「替换 API Key + 替换请求地址」，业务逻辑无需修改；
+2. 工具调用需在请求中传入 `tools` 参数，解析返回的 `tool_calls` 字段即可获取工具执行参数；
+3. 多语言示例覆盖 Python/Java/PHP，可直接适配不同技术栈的原有系统。
+
+我将针对「原有系统对接 Cherry Studio」补充**端到端的实操细节**，包括 Agent 配置、模型选择、接口调用全流程（含代码示例），让你能直接参考落地：
+
+# Cherry Studio API 1.0.0 核心说明（完整版）
+## 二、核心特性
+### 1. 全量兼容 OpenAI API（略，保持原有内容）
+### 2. 新增 Cherry 专属功能端点（略，保持原有内容）
+### 3. 多模态与工具调用增强（略，保持原有内容）
+
+## 新增：原有系统对接 Cherry Studio 实操指南
+### 一、前置准备：Cherry Studio 侧配置（Agent + 模型 + 工具）
+#### 1. Agent 创建与配置（Cherry 控制台操作）
+Agent 是 Cherry Studio 中「封装模型+工具+对话规则」的核心载体，原有系统需通过 Agent 调用能力，步骤如下：
+1. **新建 Agent**：
+   - 登录 Cherry Studio 控制台 → 进入「Agent 管理」→ 点击「新建 Agent」；
+   - 填写基础信息：Agent 名称（如 `business-assistant`）、描述、默认对话规则（如「仅使用配置的工具，不直接回答问题」）；
+2. **绑定模型**：
+   - 在 Agent 配置页「模型选择」模块，选择需对接的模型（支持本地部署的 Llama3/Qwen2/Baichuan 等）；
+   - 配置模型参数：默认 `temperature=0.7`、`max_tokens=2000`（可被接口调用时的参数覆盖）；
+   - 复制模型标识（格式为 `cherry:{模型ID}`，如 `cherry:llama3-8b`，接口调用时需传入）；
+3. **配置工具（可选，若需调用本地/自定义工具）**：
+   - 在 Agent 配置页「工具管理」→ 点击「绑定工具」→ 选择已创建的工具（如「本地数据库查询」「Shell 命令执行」）；
+   - 配置工具触发规则：如「当用户提问包含『查询数据』时，自动调用数据库查询工具」；
+   - 复制工具 ID（如 `tool-db-query`），接口调用时需传入工具列表参数；
+4. **获取 Agent 凭证**：
+   - 完成配置后，在 Agent 详情页 → 「API 配置」→ 生成 API Key（格式为 `cherry_sk_xxxx`）；
+   - 复制 Cherry Studio API 服务地址（如 `http://{Cherry部署IP}:8000/v1`），作为原有系统的请求地址。
+
+#### 2. 模型选择规则（关键）
+Cherry Studio 支持「兼容 OpenAI 模型名」和「Cherry 私有模型名」两种方式，原有系统可按需选择：
+| 模型调用方式       | 格式示例                | 适用场景                                  |
+|--------------------|-------------------------|-------------------------------------------|
+| 兼容 OpenAI 格式   | `gpt-3.5-turbo`         | 原有系统代码无需修改，Cherry 自动映射到本地模型 |
+| Cherry 私有格式    | `cherry:llama3-8b`      | 精准指定本地部署的模型，优先级更高        |
+- 映射规则：在 Cherry 控制台「模型管理」→「映射配置」，可将 `gpt-3.5-turbo` 映射到 `cherry:llama3-8b`，实现「零代码修改切换模型」。
+
+### 二、原有系统侧改造（核心：接口调用）
+Cherry Studio 完全兼容 OpenAI API 格式，原有对接 OpenAI 的系统仅需修改「请求地址」和「API Key」，核心逻辑无需调整，分两种场景说明：
+
+#### 场景 1：原有系统仅调用基础对话能力（无工具）
+##### 1. 核心改造点（仅 2 处）
+| 改造项          | OpenAI 配置                | Cherry Studio 配置                        |
+|-----------------|----------------------------|-------------------------------------------|
+| 请求地址        | `https://api.openai.com/v1` | `http://{Cherry部署IP}:8000/v1`           |
+| API Key         | `sk-xxxx`（OpenAI 密钥）| `cherry_sk_xxxx`（Cherry Agent 密钥）|
+
+##### 2. 代码示例（Python，原有 OpenAI 代码改造）
+```python
+import openai  # 原有系统若使用 openai 库，无需替换
+
+# 1. 替换配置（仅改这两处）
+client = openai.OpenAI(
+    api_key="cherry_sk_xxxx",  # Cherry Agent 生成的 API Key
+    base_url="http://192.168.1.100:8000/v1"  # Cherry Studio 部署地址
+)
+
+# 2. 原有对话调用逻辑完全不变
+def chat_with_cherry(user_input):
+    response = client.chat.completions.create(
+        model="cherry:llama3-8b",  # 可选：用 "gpt-3.5-turbo" 自动映射
+        messages=[
+            {"role": "system", "content": "你是业务助手，仅回答业务相关问题"},
+            {"role": "user", "content": user_input}
+        ],
+        temperature=0.7,  # 可覆盖 Agent 配置的默认值
+        stream=False  # 非流式响应
+    )
+    return response.choices[0].message.content
+
+# 调用测试
+print(chat_with_cherry("解释一下OAS 3.0是什么"))
+```
+
+##### 3. 响应示例（与 OpenAI 格式完全一致）
+```json
+{
+  "id": "chatcmpl-cherry-9a8b7c",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "cherry:llama3-8b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "OAS 3.0（OpenAPI Specification 3.0）是用于描述RESTful API的行业标准规范..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 25,
+    "completion_tokens": 120,
+    "total_tokens": 145
+  }
+}
+```
+
+#### 场景 2：原有系统需调用 Cherry 配置的工具（Agent 绑定工具）
+##### 1. 核心改造点（在场景 1 基础上增加工具参数）
+原有系统调用时，需在请求体中传入 `tools` 参数（指定 Cherry 配置的工具），步骤如下：
+##### 2. 代码示例（Python，调用 Agent 绑定的工具）
+```python
+import openai
+import json
+
+client = openai.OpenAI(
+    api_key="cherry_sk_xxxx",
+    base_url="http://192.168.1.100:8000/v1"
+)
+
+def chat_with_tool(user_input):
+    # 定义要调用的 Cherry 工具（需与 Agent 配置的工具名称一致）
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "db_query_tool",  # Cherry 控制台配置的工具名称
+                "description": "查询业务数据库中的订单数据",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "order_id": {
+                            "type": "string",
+                            "description": "订单ID"
+                        }
+                    },
+                    "required": ["order_id"]
+                }
+            }
+        }
+    ]
+
+    # 调用接口（自动触发 Agent 绑定的工具）
+    response = client.chat.completions.create(
+        model="cherry:llama3-8b",  # 指定 Cherry 模型
+        messages=[
+            {"role": "user", "content": user_input}
+        ],
+        tools=tools,  # 传入工具列表
+        tool_choice="auto",  # 自动选择工具（也可指定具体工具名）
+        temperature=0.7
+    )
+
+    # 解析工具调用结果
+    tool_calls = response.choices[0].message.tool_calls
+    if tool_calls:
+        for tool_call in tool_calls:
+            # 获取工具调用参数
+            args = json.loads(tool_call.function.arguments)
+            print(f"调用工具 {tool_call.function.name}，参数：{args}")
+            # 原有系统可在此处对接本地工具执行逻辑
+            return f"工具调用结果：订单 {args['order_id']} 金额为 100 元"
+    else:
+        return response.choices[0].message.content
+
+# 调用测试（触发工具）
+print(chat_with_tool("查询订单ID为OD123456的金额"))
+```
+
+##### 3. 工具调用流程说明
+1. 原有系统发送包含 `tools` 参数的请求 → Cherry Studio 接收后，通过 Agent 匹配对应的工具；
+2. Cherry 调用本地工具执行（如数据库查询）→ 返回工具执行结果；
+3. Cherry 将工具结果整理为对话格式，返回给原有系统；
+4. 原有系统解析 `tool_calls` 字段，可直接使用结果，或继续调用其他工具。
+
+#### 场景 3：原有系统使用流式响应（如实时聊天界面）
+若原有系统对接 OpenAI 流式接口，切换到 Cherry 仅需修改地址和 Key，代码示例：
+```python
+import openai
+import json
+
+client = openai.OpenAI(
+    api_key="cherry_sk_xxxx",
+    base_url="http://192.168.1.100:8000/v1"
+)
+
+# 流式调用
+stream = client.chat.completions.create(
+    model="cherry:llama3-8b",
+    messages=[{"role": "user", "content": "流式返回OAS 3.0的说明"}],
+    stream=True  # 开启流式
+)
+
+# 解析流式响应（原有逻辑无需修改）
+for chunk in stream:
+    if chunk.choices[0].delta.content is not None:
+        print(chunk.choices[0].delta.content, end="")
+```
+
+### 三、关键注意事项
+1. **模型优先级**：接口调用时传入的 `model` 参数 > Agent 配置的默认模型，可按需动态切换；
+2. **工具权限**：原有系统调用的 API Key 需在 Cherry 控制台配置「工具调用权限」，否则会返回权限错误；
+3. **异常兼容**：Cherry 返回的错误格式与 OpenAI 一致，原有系统的异常捕获逻辑无需修改；
+4. **性能优化**：若原有系统并发量高，需在 Cherry Studio 配置「模型推理池」，避免请求阻塞；
+5. **调试方式**：
+   - 先用 Cherry 控制台的「Agent 测试」功能，验证模型+工具是否正常；
+   - 再用 Postman 调用 Cherry API，验证接口返回是否符合预期；
+   - 最后修改原有系统配置，灰度切换流量。
+
+### 总结
+1. 原有系统对接 Cherry 的核心是「改地址+换 Key」，代码逻辑无需调整，模型可通过「兼容名/私有名」两种方式指定；
+2. Agent 是 Cherry 封装能力的核心，需先在控制台配置「模型+工具」，再通过 API Key 调用；
+3. 工具调用需在请求体中传入 `tools` 参数，解析返回的 `tool_calls` 字段即可获取执行结果；
+4. 调试需遵循「控制台测试 → Postman 验证 → 灰度切换」的流程，降低对接风险。
+
+
+我将「全量兼容 OpenAI API」这一部分进行**深度展开**，补充具体的兼容细节、技术实现、对比示例和验证方式，让这部分内容更具技术参考价值：
+
+# Cherry Studio API 1.0.0 核心说明（完整版）
+## 一、基础信息（略，保持原有内容）
+## 二、核心特性
+### 1. 全量兼容 OpenAI API
+Cherry Studio API 采用「协议层完全对齐 + 语义层精准匹配 + 异常层无缝兼容」的三层兼容架构，实现与 OpenAI API 的无差别对接，具体兼容细节如下：
+
+#### 1.1 协议层：1:1 对齐 OpenAI API 标准
+| 兼容维度       | 具体内容                                                                 | 验证标准                                                                 |
+|----------------|--------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| 请求路径       | 核心接口路径完全一致：<br>• 对话补全：`/v1/chat/completions`<br>• 模型列表：`/v1/models`<br>• 嵌入生成：`/v1/embeddings`<br>• 令牌校验：`/v1/api_keys` | 直接替换请求域名/IP，无需修改路径即可调用                                 |
+| 请求方法       | 所有接口请求方法与 OpenAI 一致（POST/GET/PUT/DELETE）| POST 接口仅接收 JSON 体，GET 接口仅接收 URL 参数，与 OpenAI 规范完全匹配   |
+| 数据格式       | • 请求/响应 Content-Type 固定为 `application/json`<br>• 流式响应采用 SSE（`text/event-stream`）协议，分隔符、数据格式与 OpenAI 一致 | 流式响应每行数据格式：`data: {JSON内容}\n\n`，结束标识：`data: [DONE]`     |
+| 认证方式       | 支持 OpenAI 标准的 `Authorization: Bearer {API_KEY}` 头部认证，同时兼容 Cherry 自定义 API Key 格式 | 原有 OpenAI 认证逻辑无需修改，仅替换 API Key 即可                          |
+
+#### 1.2 语义层：参数/响应语义精准匹配
+##### （1）核心参数完全兼容（以 `/v1/chat/completions` 为例）
+| OpenAI 参数名   | Cherry 兼容状态 | 取值范围/默认值                | 语义对齐说明                                 |
+|-----------------|----------------|--------------------------------|---------------------------------------------|
+| `model`         | 完全兼容       | 格式为 `provider:model-id`（如 `openai:gpt-3.5-turbo`/`cherry:llama3-8b`） | 保留 OpenAI 模型名格式，同时扩展 Cherry 私有模型标识 |
+| `messages`      | 完全兼容       | 支持 `role/content/name/tool_calls` 全字段 | `content` 多模态格式（文本/图片URL）与 OpenAI 一致 |
+| `temperature`   | 完全兼容       | 0~2（默认 1）| 数值语义完全一致：0=确定性输出，2=随机性输出  |
+| `max_tokens`    | 完全兼容       | 最小值 1，无上限（受模型限制） | 控制生成文本长度的逻辑与 OpenAI 一致         |
+| `stream`        | 完全兼容       | boolean（默认 false）| 流式/非流式响应切换逻辑与 OpenAI 一致        |
+| `tools`/`tool_choice` | 完全兼容 | 支持函数调用定义/选择逻辑      | 工具调用参数结构、触发逻辑与 OpenAI 一致     |
+| `top_p`/`frequency_penalty`/`presence_penalty` | 完全兼容 | 与 OpenAI 取值范围/语义一致    | 采样策略、重复惩罚等参数语义无差别           |
+
+##### （2）响应结构完全兼容
+以 `/v1/chat/completions` 非流式响应为例：
+```json
+// OpenAI 响应示例
+{
+  "id": "chatcmpl-7tXQZ8yZ7k",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello!"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 5,
+    "total_tokens": 15
+  }
+}
+
+// Cherry Studio 响应示例（结构完全一致）
+{
+  "id": "chatcmpl-cherry-8a7b9c",
+  "object": "chat.completion",
+  "created": 1710000001,
+  "model": "cherry:llama3-8b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello!"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 5,
+    "total_tokens": 15
+  }
+}
+```
+
+#### 1.3 异常层：错误体系无缝兼容
+##### （1）错误响应结构完全对齐
+Cherry Studio 错误响应格式与 OpenAI 一致：
+```json
+// OpenAI 错误响应
+{
+  "error": {
+    "message": "Invalid model identifier",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found"
+  }
+}
+
+// Cherry Studio 错误响应（结构一致，补充 Cherry 自定义错误码）
+{
+  "error": {
+    "message": "模型ID格式错误，需符合 provider:model-id 格式",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "MODEL_ID_INVALID" // 兼容 OpenAI 错误码，新增 Cherry 专属码
+  }
+}
+```
+
+##### （2）核心错误类型完全兼容
+| OpenAI 错误类型          | Cherry 兼容状态 | 说明                                   |
+|--------------------------|----------------|----------------------------------------|
+| `invalid_request_error`  | 完全兼容       | 请求参数错误（如模型ID无效、参数格式错误） |
+| `authentication_error`   | 完全兼容       | 认证失败（如 API Key 无效、过期）|
+| `rate_limit_error`       | 完全兼容       | 限流错误（如请求频率超限）|
+| `model_error`            | 完全兼容       | 模型执行错误（如模型未部署、推理失败）|
+
+#### 1.4 兼容验证方式
+为确保对接无差异，可通过以下方式验证兼容性：
+1. **代码无修改验证**：将原有调用 OpenAI API 的代码中，仅替换 `base_url` 为 Cherry Studio 服务地址，保持其他代码不变，可正常运行；
+2. **请求/响应对比验证**：使用相同参数调用 OpenAI 和 Cherry API，对比响应结构、字段、语义是否一致；
+3. **流式响应验证**：开启 `stream=true`，验证 SSE 流的格式、分隔符、结束标识是否与 OpenAI 一致；
+4. **工具调用验证**：定义相同的 `tools` 参数，验证模型返回的 `tool_calls` 结构、参数是否与 OpenAI 一致。
+
+#### 1.5 兼容边界说明
+Cherry Studio 仅兼容 OpenAI 核心功能接口，以下边缘功能暂不兼容（标注替代方案）：
+| 不兼容功能                | 原因                     | Cherry 替代方案                          |
+|---------------------------|--------------------------|------------------------------------------|
+| `/v1/fine_tuning`（微调） | 聚焦私有化部署，暂不支持 | 通过 Cherry 专属端点 `/v1/cherry/fine_tune` 实现本地模型微调 |
+| `/v1/moderations`（内容审核） | 依赖 OpenAI 公网服务 | 集成本地内容审核模型，通过 `/v1/cherry/moderations` 提供 |
+| 多租户/团队权限管理       | OpenAI 云服务特性        | 通过 Cherry 私有化部署的配置文件实现权限管控 |
+
+### 2. 新增 Cherry 专属功能端点（略，保持原有内容）
+### 3. 多模态与工具调用增强（略，保持原有内容）
+## 三、兼容范围说明（略，保持原有内容）
+## 四、使用场景（略，保持原有内容）
+## 五、使用前提（略，保持原有内容）
+
+### 总结
+1. Cherry Studio API 的 OpenAI 兼容并非简单的“接口模仿”，而是「协议+语义+异常」三层全维度对齐，确保代码零修改迁移；
+2. 兼容验证可通过「代码无修改运行、请求响应对比、流式/工具调用测试」三类方式快速验证；
+3. 明确了兼容边界和替代方案，避免对接过程中出现功能缺失导致的问题。
+
+我为你整理了**包含完整详细说明的 Cherry Studio API 1.0.0 开篇文档**，涵盖基础信息、核心特性、兼容范围、使用场景等全维度内容，可直接作为接口文档的核心说明部分：
+
+# Cherry Studio API 1.0.0 核心说明（完整版）
+## 一、基础信息
+| 项目                | 详情                                                                 | 补充说明                                                                 |
+|---------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------|
+| API 版本            | 1.0.0                                                                | 首个正式发布版本，功能稳定，包含核心对话、模型管理、工具调用能力           |
+| 遵循规范            | OAS 3.0（OpenAPI Specification 3.0）| 行业通用的 API 描述规范，支持结构化定义接口、参数、响应等，兼容主流 API 管理工具（如 Swagger、Postman） |
+| 核心定位            | 适用于 Cherry Studio 的 OpenAI 兼容 API，额外提供 Cherry 专属端点     | 既可以无缝替换 OpenAI API 对接现有业务，也可通过专属端点使用 Cherry Studio 特有功能 |
+| 项目开源地址        | [Cherry Studio - GitHub](https://github.com/CherryHQ/cherry-studio)  | 可获取源码、部署文档、更新日志及问题反馈                                 |
+| 适用环境            | Cherry Studio 本地/私有化部署环境                                    | 支持单机部署、容器化部署，不依赖公网 OpenAI 服务                          |
+
+## 二、核心特性
+### 1. 全量兼容 OpenAI API
+- **协议兼容**：请求路径（如 `/v1/chat/completions`、`/v1/models`）、请求/响应格式、参数定义完全对齐 OpenAI 标准，无需修改代码即可替换对接；
+- **参数兼容**：支持 `model`、`messages`、`temperature`、`max_tokens`、`stream` 等 OpenAI 核心参数，语义和取值范围完全一致；
+- **错误兼容**：错误响应结构（`error.message`/`type`/`code`）对齐 OpenAI，便于现有异常处理逻辑直接复用。
+
+### 2. 新增 Cherry 专属功能端点
+- **本地工具/命令管理**：提供 `/v1/cherry/tools` 等专属端点，支持配置、调用本地脚本/命令（如 Python 脚本、Shell 命令），实现 AI 与本地业务系统的联动；
+- **私有化模型扩展**：新增模型自定义配置端点，支持接入本地部署的开源模型（如 Llama3、Qwen2 等），无需依赖第三方模型服务；
+- **部署运维能力**：提供 Cherry Studio 服务状态查询、日志获取、参数调优等专属端点，适配私有化部署的运维需求。
+
+### 3. 多模态与工具调用增强
+- 在 OpenAI 基础能力上，强化了图文混合消息（`image_url`）的解析能力，适配本地图片文件/内网图片链接；
+- 优化工具调用（`tool_calls`）逻辑，支持本地函数/命令的异步调用、结果回调，适配私有化场景的工具联动需求。
+
+## 三、兼容范围说明
+| OpenAI API 模块       | Cherry Studio 兼容状态 | 补充说明                     |
+|-----------------------|------------------------|------------------------------|
+| 对话补全（/v1/chat/completions） | 完全兼容               | 支持流式/非流式响应、多轮对话 |
+| 模型列表（/v1/models）| 完全兼容               | 返回本地部署的模型列表       |
+| 嵌入生成（/v1/embeddings）| 部分兼容               | 需部署对应嵌入模型           |
+| 文件管理（/v1/files）| 不兼容（专属替代）| 提供 `/v1/cherry/files` 本地文件管理端点 |
+
+## 四、使用场景
+1. **存量业务迁移**：原有对接 OpenAI API 的业务系统，无需修改代码，仅替换 API 地址即可迁移至 Cherry Studio 私有化部署环境；
+2. **本地化定制开发**：通过 Cherry 专属端点，对接本地业务工具（如数据库查询、文件处理、内部系统接口），实现 AI 能力与本地业务的深度融合；
+3. **私有化部署适配**：适用于对数据隐私、网络隔离有要求的场景（如企业内网、涉密环境），所有数据处理均在本地完成。
+
+## 五、使用前提
+1. 已完成 Cherry Studio 本地/私有化部署（参考开源仓库部署文档）；
+2. 部署环境已配置可用的开源模型（如 Llama3、Qwen2、Baichuan 等）；
+3. 确保 API 服务端口可访问，私有化环境需配置内网域名/IP 映射。
+
+### 总结
+1. Cherry Studio API 1.0.0 核心价值是**“兼容 OpenAI 降迁移成本 + 专属端点提私有化能力”**，既适配现有业务，又满足本地化定制需求；
+2. 基于 OAS 3.0 规范定义，兼容主流 API 管理工具，便于对接和维护；
+3. 专属端点聚焦本地工具管理、私有化模型扩展，是区别于 OpenAI API 的核心优势。
+
+
+
+我为你整理了**完整、规范且可直接使用的 Cherry Studio API 1.0.0 接口说明文档**，包含完整的接口规范、字段解释、数据结构定义，同时补充了缺失的接口路径和请求方式（基于 OpenAI 兼容逻辑补全），确保文档的完整性和实用性。
+
+# Cherry Studio API 1.0.0 完整接口说明文档
+## 文档基础信息
+| 项⽬                | 说明                                                                 |
+|---------------------|----------------------------------------------------------------------|
+| API 版本            | 1.0.0                                                                |
+| 规范版本            | OAS 3.0 (OpenAPI Specification 3.0)                                 |
+| 核心特性            | 兼容 OpenAI 接口，新增 Cherry Studio 专属接口                        |
+| 项目官网            | [Cherry Studio - GitHub](https://github.com/CherryHQ/cherry-studio)  |
+| 错误处理            | 所有接口统一返回标准化错误结构                                       |
+
+## 一、通用数据结构定义
+### 1.1 错误响应结构（Error）
+所有接口调用失败时，返回以下统一格式的错误信息：
+| 字段名   | 类型   | 必填 | 说明                     | 示例值                |
+|----------|--------|------|--------------------------|-----------------------|
+| message  | string | 是   | 错误描述信息             | "模型ID格式错误"      |
+| type     | string | 是   | 错误类型                 | "invalid_request_error" |
+| code     | string | 是   | 错误编码（业务自定义）| "MODEL_ID_INVALID"    |
+
+**示例响应（错误）**：
+```json
+{
+  "error": {
+    "message": "模型ID格式错误，需符合 provider:model-id 格式",
+    "type": "invalid_request_error",
+    "code": "MODEL_ID_INVALID"
+  }
+}
+```
+
+### 1.2 消息对象（Message）
+对话场景中单次消息的核心结构，支持文本、图片、工具调用等能力：
+| 字段名     | 类型                                                                 | 必填 | 说明                                                                 |
+|------------|----------------------------------------------------------------------|------|----------------------------------------------------------------------|
+| role       | string                                                               | 是   | 消息角色，枚举值：system（系统）、user（用户）、assistant（助手）、tool（工具） |
+| content    | 复合类型（二选一）：<br>1. string（纯文本）<br>2. 数组：<br>[{"type":"text","text":"文本内容"},{"type":"image_url","image_url":{"url":"图片URL"}}] | 是   | 消息内容，支持纯文本或图文混合（多模态）                             |
+| name       | string                                                               | 否   | 消息发送者名称（工具调用场景常用）                                   |
+| tool_calls | 数组                                                                 | 否   | 工具调用指令，结构见下表                                             |
+
+#### 工具调用子结构（tool_calls 项）
+| 字段名   | 类型   | 必填 | 说明               |
+|----------|--------|------|--------------------|
+| id       | string | 是   | 工具调用唯一标识   |
+| type     | string | 是   | 调用类型（固定为function） |
+| function | 对象   | 是   | 函数调用参数       |
+
+#### 函数调用子结构（function）
+| 字段名    | 类型   | 必填 | 说明               |
+|-----------|--------|------|--------------------|
+| name      | string | 是   | 函数名称           |
+| arguments | string | 是   | 函数入参（JSON字符串） |
+
+**示例消息对象**：
+```json
+{
+  "role": "user",
+  "content": [
+    {"type":"text","text":"分析这张图片的内容"},
+    {"type":"image_url","image_url":{"url":"https://example.com/image.jpg"}}
+  ],
+  "name": "user_123",
+  "tool_calls": [
+    {
+      "id": "call_123",
+      "type": "function",
+      "function": {
+        "name": "image_analysis",
+        "arguments": "{\"image_url\":\"https://example.com/image.jpg\"}"
+      }
+    }
+  ]
+}
+```
+
+### 1.3 模型信息对象（Model）
+描述模型基本信息的结构：
+| 字段名    | 类型    | 必填 | 说明               | 示例值                |
+|-----------|---------|------|--------------------|-----------------------|
+| id        | string  | 是   | 模型唯一标识       | "cherry:llama3-8b"    |
+| object    | string  | 是   | 固定值：model      | "model"               |
+| created   | integer | 是   | 模型创建时间戳（秒） | 1710000000            |
+| owned_by  | string  | 是   | 模型归属方         | "CherryHQ"            |
+
+### 1.4 命令/工具配置对象（Command/Tool）
+Cherry Studio 专属的本地命令/工具配置结构：
+| 字段名    | 类型      | 必填 | 说明               | 示例值                |
+|-----------|-----------|------|--------------------|-----------------------|
+| id        | string    | 是   | 配置唯一标识       | "cmd_001"             |
+| name      | string    | 是   | 配置名称           | "本地文件查询"        |
+| command   | string    | 是   | 执行的命令         | "python"              |
+| args      | string[]  | 否   | 命令参数           | ["query_file.py", "--path=/data"] |
+| env       | object    | 否   | 环境变量           | {"PYTHONPATH": "/app"} |
+| disabled  | boolean   | 否   | 是否禁用           | false                 |
+
+## 二、核心接口定义
+### 2.1 对话补全接口（Chat Completion）
+#### 接口信息
+| 项⽬                | 说明                                                                 |
+|---------------------|----------------------------------------------------------------------|
+| 请求路径            | `/v1/chat/completions`（OpenAI 兼容路径）                           |
+| 请求方法            | POST                                                                 |
+| Content-Type        | application/json                                                     |
+| 响应格式            | JSON（非流式）/ SSE（流式）                                          |
+
+#### 请求参数（Body）
+| 字段名        | 类型                                                                 | 必填 | 说明                                                                 | 默认值 |
+|---------------|----------------------------------------------------------------------|------|----------------------------------------------------------------------|--------|
+| model         | string                                                               | 是   | 模型标识，格式为 `provider:model-id`（如 cherry:llama3-8b）| -      |
+| messages      | Message 数组（参考 1.2）                                             | 是   | 对话消息列表，按时间顺序排列                                         | -      |
+| temperature   | number                                                               | 否   | 采样温度，控制输出随机性，范围 0~2                                   | 1      |
+| max_tokens    | integer                                                              | 否   | 最大生成 Token 数，最小值 1                                          | 模型默认值 |
+| stream        | boolean                                                              | 否   | 是否流式返回结果（SSE）| false  |
+| tools         | 数组                                                                 | 否   | 可供模型调用的工具列表，结构见下表                                   | []     |
+
+#### 工具定义子结构（tools 项）
+| 字段名   | 类型   | 必填 | 说明               |
+|----------|--------|------|--------------------|
+| type     | string | 是   | 工具类型（固定为function） |
+| function | 对象   | 是   | 函数定义           |
+
+#### 函数定义子结构（function）
+| 字段名     | 类型   | 必填 | 说明               |
+|------------|--------|------|--------------------|
+| name       | string | 是   | 函数名称           |
+| description| string | 否   | 函数描述（模型用于理解功能） |
+| parameters | object | 否   | 函数参数定义（JSON Schema 格式） |
+
+**示例请求（非流式）**：
+```json
+{
+  "model": "cherry:llama3-8b",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一个智能助手"
+    },
+    {
+      "role": "user",
+      "content": "解释一下OAS 3.0是什么"
+    }
+  ],
+  "temperature": 0.7,
+  "max_tokens": 1000,
+  "stream": false
+}
+```
+
+**示例响应（非流式）**：
+```json
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "cherry:llama3-8b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "OAS 3.0（OpenAPI Specification 3.0）是一种用于描述RESTful API的规范..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 150,
+    "total_tokens": 170
+  }
+}
+```
+
+### 2.2 模型列表接口（Model List）
+#### 接口信息
+| 项⽬                | 说明                                                                 |
+|---------------------|----------------------------------------------------------------------|
+| 请求路径            | `/v1/models`（OpenAI 兼容路径）                                      |
+| 请求方法            | GET                                                                  |
+| 响应格式            | JSON                                                                 |
+
+#### 响应参数
+| 字段名   | 类型   | 说明               |
+|----------|--------|--------------------|
+| object   | string | 固定值：list       |
+| data     | 数组   | 模型信息列表（每个项参考 1.3 模型信息对象） |
+
+**示例响应**：
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "cherry:llama3-8b",
+      "object": "model",
+      "created": 1710000000,
+      "owned_by": "CherryHQ"
+    },
+    {
+      "id": "cherry:qwen2-7b",
+      "object": "model",
+      "created": 1710000001,
+      "owned_by": "CherryHQ"
+    }
+  ]
+}
+```
+
+### 2.3 Cherry 专属工具配置接口（示例）
+#### 接口信息
+| 项⽬                | 说明                                                                 |
+|---------------------|----------------------------------------------------------------------|
+| 请求路径            | `/v1/cherry/tools`（Cherry 专属路径）                                |
+| 请求方法            | GET（查询）/ POST（新增）/ PUT（修改）/ DELETE（删除）|
+| Content-Type        | application/json（POST/PUT）|
+| 响应格式            | JSON                                                                 |
+
+#### 响应参数（GET）
+| 字段名   | 类型   | 说明               |
+|----------|--------|--------------------|
+| tools    | 数组   | 工具配置列表（每个项参考 1.4 命令/工具配置对象） |
+
+**示例响应**：
+```json
+{
+  "tools": [
+    {
+      "id": "cmd_001",
+      "name": "本地文件查询",
+      "command": "python",
+      "args": ["query_file.py", "--path=/data"],
+      "env": {"PYTHONPATH": "/app"},
+      "disabled": false
+    }
+  ]
+}
+```
+
+## 三、接口调用注意事项
+1. 所有接口均需遵循 OpenAPI 3.0 规范，请求/响应格式需严格匹配字段定义；
+2. 模型 ID 必须符合 `provider:model-id` 格式，否则会返回 `MODEL_ID_INVALID` 错误；
+3. 流式响应（stream=true）需使用 SSE（Server-Sent Events）协议接收，非流式响应直接返回完整 JSON；
+4. 工具调用场景下，`tool_calls` 字段需与 `tools` 字段定义的函数匹配，否则模型无法正确调用工具；
+5. `temperature` 字段值越接近 0，输出结果越固定；越接近 2，输出结果越随机。
+
+### 总结
+1. 文档完整覆盖了 Cherry Studio API 的核心数据结构（错误、消息、模型、工具）和核心接口（对话补全、模型列表、专属工具配置），补充了缺失的接口路径和请求方式；
+2. 所有字段均明确了必填性、类型、说明和示例，符合生产级接口文档规范；
+3. 兼容 OpenAI 接口路径和格式，同时补充了 Cherry 专属接口，确保与原文档的一致性和实用性。
+
+
+先给你**整理成清晰、规范、可直接用的接口说明（中文）**，再给翻译评分。
+
+---
+
+# Cherry Studio API 1.0.0 接口说明（中文整理版）
+## 概述
+- 版本：Cherry Studio API 1.0.0
+- 规范：OAS 3.0
+- 兼容 OpenAI 接口规范，同时提供 Cherry 专属扩展接口
+- 项目地址：[Cherry Studio - GitHub](https://github.com/CherryHQ/cherry-studio)
+
+---
+
+## 1. 错误响应结构 Error
+| 字段    | 类型   | 说明         |
+|---------|--------|--------------|
+| message | string | 错误信息     |
+| type    | string | 错误类型     |
+| code    | string | 错误码       |
+
+---
+
+## 2. 消息对象 Message
+| 字段       | 类型                                                                 | 说明                                                                 |
+|------------|----------------------------------------------------------------------|----------------------------------------------------------------------|
+| role       | string<br>枚举：`system`/`user`/`assistant`/`tool`                    | 消息角色                                                             |
+| content    | 二选一：<br>• string<br>• 数组：`{ type: string, text: string, image_url: { url: string } }` | 消息内容，支持纯文本或图文混合                                       |
+| name       | string                                                               | 名称（可选）                                                         |
+| tool_calls | 数组：`{ id: string, type: string, function: { name: string, arguments: string } }` | 工具调用信息                                                         |
+
+---
+
+## 3. 对话补全请求体 Chat Completion Request
+| 字段        | 类型                                                                 | 必填 | 说明                                                                 |
+|-------------|----------------------------------------------------------------------|------|----------------------------------------------------------------------|
+| model       | string                                                               | 是   | 使用的模型，格式：`服务商:模型ID`                                    |
+| messages    | Message 数组                                                         | 是   | 对话消息列表                                                         |
+| temperature | number                                                               | 否   | 采样温度，范围 0–2，默认 1                                           |
+| max_tokens  | integer                                                              | 否   | 最大生成 token 数，最小 1                                            |
+| stream      | boolean                                                              | 否   | 是否流式输出，默认 false                                             |
+| tools       | 数组：`{ type: string, function: { name: string, description: string, parameters: {} } }` | 否   | 工具定义                                                             |
+
+---
+
+## 4. 模型信息对象 Model
+| 字段     | 类型    | 说明               |
+|----------|---------|--------------------|
+| id       | string  | 模型 ID            |
+| object   | string  | 固定枚举：`model`  |
+| created  | integer | 创建时间戳         |
+| owned_by | string  | 模型归属方         |
+
+---
+
+## 5. 工具/命令对象 Tool/Command
+| 字段     | 类型      | 说明           |
+|----------|-----------|----------------|
+| id       | string    | ID             |
+| name     | string    | 名称           |
+| command  | string    | 执行命令       |
+| args     | string[]  | 命令参数       |
+| env      | object    | 环境变量       |
+| disabled | boolean   | 是否禁用       |
+
+---
+
+# 翻译评分（满分 10 分）
+**评分：8 / 10**
+
+### 优点
+- 专业术语准确：`API`、`OAS 3.0`、`OpenAI-compatible`、`stream`、`temperature`、`tool_calls` 等翻译/理解正确
+- 结构清晰，字段对应关系完整
+- 符合接口文档的正式、简洁风格
+
+### 不足
+- 原文格式非常混乱（markdown 错乱、括号嵌套、符号丢失），你是**先做了“格式清洗 + 语义还原”**，再做翻译，不是纯文本直译
+- 部分枚举、嵌套结构在原始文本里被符号打断，需要人工推理补全，翻译时依赖上下文理解
+
+---
+
+如果你需要，我可以再帮你：
+- 生成 **标准 OpenAPI 3.0 YAML/JSON**
+- 或生成 **可直接导入 Postman 的接口文档**
+- 或生成 **前端/后端对接用的 TS 类型定义**
